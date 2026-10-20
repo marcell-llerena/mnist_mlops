@@ -84,7 +84,7 @@ subir = gr.Interface(
 demo = gr.TabbedInterface(
     [dibujar, subir],
     tab_names=["✏️ Dibujar", "🖼️ Subir imagen"],
-    title="✍️ Reconocedor de dígitos MNIST 🚀 (desplegado automáticamente)",
+    title="✍️ Reconocedor de dígitos MNIST",
 )
 
 if __name__ == "__main__":

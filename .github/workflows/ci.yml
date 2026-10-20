@@ -1,0 +1,74 @@
+# Integración continua (CI)
+#
+# Cada vez que alguien sube código a GitHub (push) o abre un Pull Request,
+# GitHub prende una computadora nueva y limpia, instala el proyecto desde cero
+# y revisa que todo funcione: datos, entrenamiento (con su puerta de calidad),
+# pruebas y que la API funcione SIN torch (como en producción).
+# Si algo falla, aparece una ❌ roja; si todo pasa, un ✅ verde.
+#
+# Dónde verlo: en GitHub, pestaña "Actions".
+
+# El nombre que aparece en la pestaña Actions (y el que usa cd.yml para esperarlo)
+name: CI
+
+on:
+  push:
+    branches: [main]          # al subir código a main
+  pull_request:               # y en cada Pull Request, ANTES de unirlo a main
+
+# Solo necesita leer el código (principio de "mínimo permiso")
+permissions:
+  contents: read
+
+jobs:
+  probar:
+    name: Datos, entrenamiento y pruebas
+    # Computadora de GitHub: Linux, sin GPU. Se entrena en CPU (unos minutos).
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Descargar el código del repositorio
+        uses: actions/checkout@v7
+
+      # Versión fija de uv: la misma que en el Dockerfile y en tu computadora
+      - name: 2. Instalar uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.19"
+
+      # Instala TODO: servir + dev (pytest) + train (torch, versión solo CPU en Linux).
+      # --locked hace que falle si alguien cambió pyproject.toml sin actualizar uv.lock.
+      - name: 3. Instalar Python y las dependencias
+        run: uv sync --locked
+
+      - name: 4. Descargar y validar los datos (MNIST)
+        run: uv run preparar-datos
+
+      # Entrena en CPU, exporta a ONNX y evalúa el ONNX.
+      # Si el accuracy queda por debajo de MIN_ACCURACY, este paso falla
+      # y el resto no se ejecuta: un modelo malo nunca pasa.
+      - name: 5. Entrenar el modelo (puerta de calidad)
+        run: uv run entrenar
+
+      - name: 6. Ejecutar las pruebas
+        run: uv run pytest -v
+
+      # Guarda el modelo ONNX y su ficha técnica para descargarlos desde GitHub
+      # (en la página de la ejecución, sección "Artifacts").
+      - name: 7. Guardar el modelo entrenado
+        uses: actions/upload-artifact@v7
+        with:
+          name: modelo-mnist
+          path: models/
+          retention-days: 7
+
+      # Simula la imagen de producción: desinstala torch y el resto de los grupos
+      # (deja solo las dependencias de [project]) y prueba una predicción.
+      # Si alguien hace que la API importe torch por error, aquí se nota
+      # ANTES de que falle en Render.
+      - name: 8. Comprobar que la API funciona sin torch
+        run: |
+          uv sync --locked --no-default-groups
+          uv run --no-sync python -c "import importlib.util; assert importlib.util.find_spec('torch') is None, 'torch sigue instalado'"
+          uv run --no-sync python -c "from mnist_mlops.api import app; print('API importada sin torch ✅')"
+          uv run --no-sync predecir

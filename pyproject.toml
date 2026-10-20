@@ -1,0 +1,64 @@
+[project]
+name = "mnist-mlops"
+version = "0.1.0"
+description = "Proyecto MLOps de visión: reconocer dígitos escritos a mano (MNIST) con PyTorch, ONNX, FastAPI y Gradio"
+readme = "README.md"
+authors = [
+    { name = "marcell-llerena", email = "marcell.llerenaai@gmail.com" }
+]
+requires-python = ">=3.14"
+# Dependencias para SERVIR el modelo: lo único que lleva la imagen de producción.
+# Ojo: aquí NO está torch. Para predecir basta con onnxruntime (mucho más liviano).
+dependencies = [
+    "fastapi[standard]>=0.143.3",
+    "gradio>=6.30.0",
+    "numpy>=2.5.4",
+    "onnxruntime>=1.31.0",
+    "pillow>=12.3.0",
+    "requests>=2.34.2",
+]
+
+# Comandos cortos que se pueden ejecutar con `uv run <comando>`
+[project.scripts]
+preparar-datos = "mnist_mlops.data:main"
+entrenar = "mnist_mlops.train:main"
+predecir = "mnist_mlops.predict:main"
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+# Grupos de dependencias que NO van a producción:
+#   dev   → para probar (pytest)
+#   train → para entrenar y exportar el modelo (torch pesa ~600 MB: solo lo usa
+#           la etapa "entrenador" del Dockerfile, el CI y tu computadora)
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+]
+train = [
+    "onnx>=1.23.2",
+    "onnxscript>=0.7.2",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
+]
+
+[tool.uv]
+# `uv sync` en tu computadora instala todo (servir + probar + entrenar)
+default-groups = ["dev", "train"]
+
+# En Linux (Docker, CI, Render) torch se descarga del índice "solo CPU" de PyTorch.
+# El torch normal de PyPI para Linux trae CUDA (GPU de NVIDIA): ~3 GB que no usaríamos.
+# En Mac se usa el de PyPI, que ya incluye soporte para MPS (la GPU de Apple).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true    # solo se usa para los paquetes que lo piden abajo
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchvision = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

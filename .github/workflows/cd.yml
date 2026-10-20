@@ -1,0 +1,47 @@
+# Despliegue continuo (CD)
+#
+#   CI ✅ en main → avisar a Render → Render construye la imagen (las 2 etapas) y la publica
+#
+# Si el CI falla, este workflow no hace nada: un modelo o código roto nunca llega a producción.
+#
+# Reparto de tareas:
+#   GitHub  → decide CUÁNDO desplegar (solo si el CI pasó)
+#   Render  → hace el trabajo pesado: descarga el código, docker build (entrena en
+#             la etapa 1, arma la imagen liviana en la etapa 2) y enciende el contenedor
+#
+# Guía paso a paso (incluye cómo crear los servicios en Render): docs/cd.md
+
+name: CD
+
+# Se ejecuta cada vez que el workflow "CI" termina en main (bien o mal: ver el "if")
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+# No necesita leer el código: solo llama a una URL
+permissions: {}
+
+jobs:
+  desplegar:
+    name: Desplegar en Render
+    # Solo si el CI terminó con ✅ (no si falló o se canceló)
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      # El "deploy hook" es una URL secreta que Render te da: al llamarla, Render
+      # descarga el código de main, construye la imagen y la pone en producción.
+      # Se guarda como secreto del repositorio (ver docs/cd.md) y se pasa por "env"
+      # para que GitHub la oculte en los registros (aparece como ***).
+      - name: Desplegar la API
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: curl --fail --silent --show-error -X POST "$HOOK"
+
+      # Gradio se despliega aparte porque en Render es otro servicio (con su propio hook)
+      - name: Desplegar la interfaz (Gradio)
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL_GRADIO }}
+        run: curl --fail --silent --show-error -X POST "$HOOK"

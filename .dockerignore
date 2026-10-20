@@ -1,0 +1,32 @@
+# =============================================================================
+# .dockerignore: lo que NO se copia a la imagen con "COPY . ."
+# =============================================================================
+# Funciona igual que .gitignore. Menos archivos = imagen más liviana,
+# construcción más rápida y nada de basura de tu computadora dentro.
+
+# Entorno virtual de tu computadora. ¡Importante! Tiene librerías compiladas
+# para macOS/Windows que no funcionan en el Linux del contenedor.
+.venv/
+
+# Datos y modelos de tu computadora: la etapa "entrenador" descarga y entrena los suyos
+data/
+models/*
+!models/.gitkeep
+
+# Git, CI y cachés de Python
+.git/
+.github/
+__pycache__/
+*.py[oc]
+.pytest_cache/
+
+# No se necesitan para ejecutar la app
+# (examples/ SÍ se copia: Gradio los muestra como ejemplos)
+tests/
+docs/
+.DS_Store
+
+# Los propios archivos de Docker
+Dockerfile
+compose.yaml
+.dockerignore

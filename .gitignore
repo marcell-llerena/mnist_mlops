@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Herramientas
+.pytest_cache/
+.DS_Store
+.gradio/
+
+# Datos de MNIST (~55 MB): se descargan con `uv run preparar-datos`
+# (examples/ sí se sube: son 10 PNG pequeños)
+data/
+
+# Artefactos del modelo (se generan con `uv run entrenar`)
+models/*
+!models/.gitkeep

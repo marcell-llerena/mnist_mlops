@@ -1,0 +1,54 @@
+# =============================================================================
+# compose.yaml: levanta todo el proyecto con un solo comando
+# =============================================================================
+#   docker compose up --build    → construye la imagen y enciende los servicios
+#   docker compose down          → apaga y borra los contenedores
+#
+# Cada servicio es un contenedor. Los dos usan la MISMA imagen (Dockerfile),
+# pero cada uno ejecuta un comando distinto:
+#
+#   api        → FastAPI con el modelo ONNX    http://localhost:8000/docs
+#   gradio     → interfaz para dibujar         http://localhost:7860
+#
+# Es la versión "en tu computadora" de lo que hacemos en Render:
+#
+#   compose.yaml (local)            Render (nube)
+#   ─────────────────────           ──────────────────────────────
+#   un servicio                     un Web Service
+#   command                         Docker Command
+#   environment                     Environment Variables
+#   ports                           lo maneja Render (variable PORT)
+#   API_URL: http://api:8000        API_URL: https://<tu-api>.onrender.com
+#
+# Guía paso a paso: docs/docker.md
+# =============================================================================
+
+services:
+
+  # --- La API: el único servicio que carga el modelo ------------------------
+  api:
+    build: .                  # construye la imagen con el Dockerfile (las dos etapas)
+    image: mnist-mlops        # y le pone este nombre (Gradio la reutiliza)
+    # Sin "command": usa el CMD del Dockerfile (fastapi run ...)
+    ports:
+      - "8000:8000"           # "puerto en tu computadora : puerto en el contenedor"
+    healthcheck:              # Docker le pregunta a la API cada 5 s: "¿estás viva?"
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # --- Interfaz con Gradio --------------------------------------------------
+  gradio:
+    image: mnist-mlops        # la misma imagen que la API...
+    command: ["python", "app/gradio_app.py"]   # ...pero con otro comando
+    environment:
+      # Dentro de Docker, cada servicio se encuentra por su NOMBRE: la API es "api"
+      API_URL: http://api:8000
+      # 0.0.0.0 = aceptar visitas desde fuera del contenedor (tu navegador)
+      GRADIO_SERVER_NAME: 0.0.0.0
+    ports:
+      - "7860:7860"
+    depends_on:
+      api:
+        condition: service_healthy   # espera a que la API responda antes de arrancar
